@@ -1,27 +1,25 @@
 #!/bin/bash
 
-# Created on 2018/12
-# Author: Kaituo XU
+# Created on 02/06/2025
+# Author: Zhenhao Ge
 
-# -- START IMPORTANT
-# * If you have mixture wsj0 audio, modify `data` to your path that including tr, cv and tt.
-# * If you jsut have origin sphere format wsj0 , modify `wsj0_origin` to your path and
-# modify `wsj0_wav` to path that put output wav format wsj0, then read and run stage 1 part.
-# After that, modify `data` and run from stage 2.
-wsj0_origin=/home/ktxu/workspace/data/CSR-I-WSJ0-LDC93S6A
-wsj0_wav=/home/ktxu/workspace/data/wsj0-wav/wsj0
-data=/home/ktxu/workspace/data/wsj-mix/2speakers/wav8k/min/
-stage=1  # Modify this to control to start from which stage
-# -- END
+# # setup envionment and working directory
+# source ~/.zshrc
+# conda activate py37
+# cd /home/users/zge/code/repo/tasnet/egs/Echo2Mix
 
-dumpdir=data  # directory to put generated json file
+data=/home/users/zge/data1/datasets/Echo2Mix
+
+stage=1
+
+dumpdir=data
 
 # -- START Conv-TasNet Config
-train_dir=$dumpdir/tr
-valid_dir=$dumpdir/cv
-evaluate_dir=$dumpdir/tt
-separate_dir=$dumpdir/tt
-sample_rate=8000
+train_dir=$dumpdir/train
+valid_dir=$dumpdir/val
+evaluate_dir=$dumpdir/test
+separate_dir=$dumpdir/test
+sample_rate=16000
 segment=4  # seconds
 cv_maxlen=6  # seconds
 # Network config
@@ -38,14 +36,14 @@ mask_nonlinear='relu'
 C=2
 # Training config
 use_cuda=1
-id=0
+id=0,1,2
 epochs=100
 half_lr=1
 early_stop=0
 max_norm=5
 # minibatch
 shuffle=1
-batch_size=3
+batch_size=6 # original: 3
 num_workers=4
 # optimizer
 optimizer=adam
@@ -55,6 +53,7 @@ l2=0
 # save and visualize
 checkpoint=0
 continue_from=""
+model_path="final.pth"
 print_freq=10
 visdom=0
 visdom_epoch=0
@@ -69,46 +68,32 @@ tag="" # tag for managing experiments.
 
 ngpu=1  # always 1
 
-. utils/parse_options.sh || exit 1;
+. utils/parse_options.sh;
 . ./cmd.sh
 . ./path.sh
 
-
-if [ $stage -le 0 ]; then
-  echo "Stage 0: Convert sphere format to wav format and generate mixture"
-  local/data_prepare.sh --data ${wsj0_origin} --wav_dir ${wsj0_wav}
-
-  echo "NOTE: You should generate mixture by yourself now.
-You can use tools/create-speaker-mixtures.zip which is download from
-http://www.merl.com/demos/deep-clustering/create-speaker-mixtures.zip
-If you don't have Matlab and want to use Octave, I suggest to replace
-all mkdir(...) in create_wav_2speakers.m with system(['mkdir -p '...])
-due to mkdir in Octave can not work in 'mkdir -p' way.
-e.g.:
-mkdir([output_dir16k '/' min_max{i_mm} '/' data_type{i_type}]);
-->
-system(['mkdir -p ' output_dir16k '/' min_max{i_mm} '/' data_type{i_type}]);"
-  exit 1
-fi
-
-
 if [ $stage -le 1 ]; then
-  echo "Stage 1: Generating json files including wav path and duration"
+  echo "Stage 1: Generating json files including wav path and duration (#samples)"
   [ ! -d $dumpdir ] && mkdir $dumpdir
-  preprocess.py --in-dir $data --out-dir $dumpdir --sample-rate $sample_rate
+  preprocess.py \
+    --in-dir $data \
+    --out-dir $dumpdir \
+    --sample-rate $sample_rate
 fi
 
-
+tag=''
 if [ -z ${tag} ]; then
   expdir=exp/train_r${sample_rate}_N${N}_L${L}_B${B}_H${H}_P${P}_X${X}_R${R}_C${C}_${norm_type}_causal${causal}_${mask_nonlinear}_epoch${epochs}_half${half_lr}_norm${max_norm}_bs${batch_size}_worker${num_workers}_${optimizer}_lr${lr}_mmt${momentum}_l2${l2}_`basename $train_dir`
 else
   expdir=exp/train_${tag}
 fi
+echo "exp dir: ${expdir}"
+continue_from="${expdir}/checkpoint.epoch14.pth"
 
 if [ $stage -le 2 ]; then
   echo "Stage 2: Training"
-  ${cuda_cmd} --gpu ${ngpu} ${expdir}/train.log \
-    CUDA_VISIBLE_DEVICES="$id" \
+  touch ${expdir}/train.log
+  CUDA_VISIBLE_DEVICES=0,1 \
     train.py \
     --train_dir $train_dir \
     --valid_dir $valid_dir \
@@ -141,31 +126,40 @@ if [ $stage -le 2 ]; then
     --save_folder ${expdir} \
     --checkpoint $checkpoint \
     --continue_from "$continue_from" \
+    --model_path ${model_path} \
     --print_freq ${print_freq} \
     --visdom $visdom \
     --visdom_epoch $visdom_epoch \
-    --visdom_id "$visdom_id"
+    --visdom_id "$visdom_id" | tee ${expdir}/train.log
 fi
 
 if [ $stage -le 3 ]; then
   echo "Stage 3: Evaluate separation performance"
   ${decode_cmd} --gpu ${ngpu} ${expdir}/evaluate.log \
     evaluate.py \
-    --model_path ${expdir}/final.pth.tar \
+    --model_path ${expdir}/final.pth \
     --data_dir $evaluate_dir \
     --cal_sdr $cal_sdr \
     --use_cuda $ev_use_cuda \
     --sample_rate $sample_rate \
     --batch_size $batch_size
-fi
 
+    # evaluate.py \
+    #   --model_path ${expdir}/final.pth \
+    #   --data_dir $evaluate_dir \
+    #   --cal_sdr $cal_sdr \
+    #   --use_cuda $ev_use_cuda \
+    #   --sample_rate $sample_rate \
+    #   --batch_size $batch_size | tee ${expdir}/evaluate.log
+
+fi
 
 if [ $stage -le 4 ]; then
   echo "Stage 4: Separate speech using Conv-TasNet"
   separate_out_dir=${expdir}/separate
   ${decode_cmd} --gpu ${ngpu} ${separate_out_dir}/separate.log \
     separate.py \
-    --model_path ${expdir}/final.pth.tar \
+    --model_path ${expdir}/final.pth \
     --mix_json $separate_dir/mix.json \
     --out_dir ${separate_out_dir} \
     --use_cuda $ev_use_cuda \

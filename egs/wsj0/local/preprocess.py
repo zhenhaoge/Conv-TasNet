@@ -5,9 +5,16 @@
 import argparse
 import json
 import os
+from pathlib import Path
 
 import librosa
 
+# set paths
+home_dir = str(Path.home())
+work_dir = os.path.join(home_dir, 'code', 'repo', 'tasnet', 'egs', 'wsj0')
+if os.getcwd() != work_dir:
+    os.chdir(work_dir)
+print('current path: {}'.format(os.getcwd()))
 
 def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000):
     file_infos = []
@@ -24,18 +31,18 @@ def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000):
     with open(os.path.join(out_dir, out_filename + '.json'), 'w') as f:
         json.dump(file_infos, f, indent=4)
 
-
 def preprocess(args):
     for data_type in ['tr', 'cv', 'tt']:
         for speaker in ['mix', 's1', 's2']:
-            preprocess_one_dir(os.path.join(args.in_dir, data_type, speaker),
-                               os.path.join(args.out_dir, data_type),
-                               speaker,
-                               sample_rate=args.sample_rate)
+            print(f'{data_type}:{speaker} ...')
+            in_dir = os.path.join(args.in_dir, data_type, speaker)
+            out_dir = os.path.join(args.out_dir, data_type)
+            preprocess_one_dir(in_dir, out_dir, speaker, sample_rate=args.sample_rate)
 
+def parse_args():
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser("WSJ0 data preprocessing")
+    usage = "WSJ0 data preprocessing"
+    parser = argparse.ArgumentParser(description=usage)
     parser.add_argument('--in-dir', type=str, default=None,
                         help='Directory path of wsj0 including tr, cv and tt')
     parser.add_argument('--out-dir', type=str, default=None,
@@ -43,5 +50,19 @@ if __name__ == "__main__":
     parser.add_argument('--sample-rate', type=int, default=8000,
                         help='Sample rate of audio file')
     args = parser.parse_args()
+    return args                           
+
+
+if __name__ == "__main__":
+
+    # runtime mode
+    args = parse_args()
+
+    # # interactive mode
+    # args = argparse.ArgumentParser()
+    # args.in_dir = '/home/users/zge/data1/datasets/WSJ0/wav8k/min'
+    # args.out_dir = 'data'
+    # args.sample_rate = 8000
+
     print(args)
     preprocess(args)

@@ -4,21 +4,18 @@
 # Author: Kaituo XU
 
 import argparse
-import os, sys
+import os
 from pathlib import Path
 
 import torch
 
 # set paths
-dataset = 'Echo2Mix'
 home_dir = str(Path.home())
-work_dir = os.path.join(home_dir, 'code', 'repo', 'tasnet', 'egs', dataset)
+work_dir = os.path.join(home_dir, 'code', 'repo', 'tasnet', 'egs', 'wsj0')
 if os.getcwd() != work_dir:
     os.chdir(work_dir)
 print('current path: {}'.format(os.getcwd()))
 
-src_dir = os.path.join(os.path.dirname(os.path.dirname(os.getcwd())), 'src')
-sys.path.insert(0, src_dir)
 from data import AudioDataLoader, AudioDataset
 from solver import Solver
 from conv_tasnet import ConvTasNet
@@ -141,7 +138,7 @@ def main(args):
     model = ConvTasNet(args.N, args.L, args.B, args.H, args.P, args.X, args.R,
                        args.C, norm_type=args.norm_type, causal=args.causal,
                        mask_nonlinear=args.mask_nonlinear)
-    print(model)
+    # print(model)
 
     if args.use_cuda:
         # device = torch.device(f"cuda:0")
@@ -170,67 +167,67 @@ def main(args):
 
 if __name__ == '__main__':
 
-    # # runtime mode
-    # args = parse_args()
+    # runtime mode
+    args = parse_args()
 
-    # interactive mode
-    args = argparse.ArgumentParser()
+    # # interactive mode
+    # args = argparse.ArgumentParser()
 
-    # task related
-    work_dir = os.getcwd()
-    args.train_dir = os.path.join(work_dir, 'data', 'train')
-    args.valid_dir = os.path.join(work_dir, 'data', 'val')
-    args.sample_rate = 16000
-    args.segment = 4 # segment length in seconds
-    args.cv_maxlen = 6 # max audio length (seconds) in cv, to avoid OOM issue
+    # # task related
+    # args.train_dir = os.path.join(work_dir, 'data', 'tr')
+    # args.valid_dir = os.path.join(work_dir, 'data', 'cv')
+    # args.sample_rate = 8000
+    # args.segment = 4 # segment length in seconds
+    # args.cv_maxlen = 6 # max audio length (seconds) in cv, to avoid OOM issue
 
-    # network architecture
-    args.N = 256 # number of filters in autoencoder
-    args.L = 20 # length of the filters in samples (40=5ms at 8kHZ)
-    args.B = 256 # number of channels in bootlenect 1X1-conv blocks
-    args.H = 512 # number of channels in conv blocks
-    args.P = 3 # kernel size in conv blocks
-    args.X = 8 # number of conv-blocks in each repeat
-    args.R = 4 # number of repeats
-    args.C = 2 # number of speakers
-    args.norm_type = 'gLN' # layer norm type
-    args.causal = 0 # causal (1) or noncausal (0) training
-    args.mask_nonlinear = 'relu' # non-linear to generate mask
+    # # network architecture
+    # args.N = 256 # number of filters in autoencoder
+    # args.L = 20 # length of the filters in samples (40=5ms at 8kHZ)
+    # args.B = 256 # number of channels in bootlenect 1X1-conv blocks
+    # args.H = 512 # number of channels in conv blocks
+    # args.P = 3 # kernel size in conv blocks
+    # args.X = 8 # number of conv-blocks in each repeat
+    # args.R = 4 # number of repeats
+    # args.C = 2 # number of speakers
+    # args.norm_type = 'gLN' # layer norm type
+    # args.causal = 0 # causal (1) or noncausal (0) training
+    # args.mask_nonlinear = 'relu' # non-linear to generate mask
 
-    # training config
-    args.use_cuda = 1
-    args.epochs = 100
-    args.half_lr = 1
-    args.early_stop = 0
-    args.max_norm = 5 # gradient norm threshold to clip
+    # # training config
+    # args.use_cuda = 1
+    # args.epochs = 100
+    # args.half_lr = 1
+    # args.early_stop = 0
+    # args.max_norm = 5 # gradient norm threshold to clip
 
-    # minibatch
-    args.shuffle = 1 # shuffle the data at every epoch
-    args.batch_size = 6
-    args.num_workers = 4 # number of workers to generate minibatch
+    # # minibatch
+    # args.shuffle = 1 # shuffle the data at every epoch
+    # args.batch_size = 3
+    # args.num_workers = 4 # number of workers to generate minibatch
 
-    # optimizer
-    args.optimizer = 'adam'
-    args.lr = 1e-3
-    args.momentum = 0.0
-    args.l2 = 0.0
+    # # optimizer
+    # args.optimizer = 'adam'
+    # args.lr = 1e-3
+    # args.momentum = 0.0
+    # args.l2 = 0.0
 
-    # save and load model
-    basename = os.path.basename(args.train_dir)
-    exp_folder = 'train_r{}_N{}_L{}_B{}_H{}_P{}_X{}_R{}_C{}_{}_causal{}_{}_epoch{}_half{}_norm{}_bs{}_worker{}_{}_lr{}_mmt{}_l2{}_{}'.format(
-        args.sample_rate, args.N, args.L, args.B, args.H, args.P, args.X, args.R, args.C, args.norm_type, args.causal, args.mask_nonlinear,
-        args.epochs, args.half_lr, args.max_norm, args.batch_size, args.num_workers, args.optimizer, f'{args.lr:.0e}'.replace("03", "3"), int(args.momentum), int(args.l2), basename)
-    exp_dir = os.path.join(work_dir, 'exp', exp_folder)
-    args.save_folder = exp_dir
-    args.checkpoint = 0
-    args.continue_from = os.path.join(args.save_folder, 'checkpoint.epoch14.pth')
-    args.model_path = 'final.pth'
+    # # save and load model
+    # # basename = os.path.basename(args.train_dir)
+    # # exp_folder = 'train_r{}_N{}_L{}_B{}_H{}_P{}_X{}_R{}_C{}_{}_causal{}_{}_epoch{}_half{}_norm{}_bs{}_worker{}_{}_lr{}_mmt{}_l2{}_{}'.format(
+    # #     args.sample_rate, args.N, args.L, args.B, args.H, args.P, args.X, args.R, args.C, args.norm_type, args.causal, args.mask_nonlinear,
+    # #     args.epochs, args.half_lr, args.max_norm, args.batch_size, args.num_workers, args.optimizer, f'{args.lr:.0e}'.replace("03", "3"), int(args.momentum), int(args.l2), basename)
+    # # exp_dir = os.path.join(work_dir, 'exp', exp_folder)
+    # exp_dir = os.path.join(work_dir, 'exp', 'train_titan12')
+    # args.save_folder = exp_dir
+    # args.checkpoint = 0
+    # args.continue_from = ""
+    # args.model_path = 'final.pth'
 
-    # logging
-    args.print_freq = 10
-    args.visdom = 0
-    args.visdom_epoch = 0
-    args.visdom_id = 'Conv-TasNet Training'
+    # # logging
+    # args.print_freq = 10
+    # args.visdom = 0
+    # args.visdom_epoch = 0
+    # args.visdom_id = 'Conv-TasNet Training'
 
     print(args)
     main(args)

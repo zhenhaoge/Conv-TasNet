@@ -3,14 +3,25 @@
 # Created on 2018/12
 # Author: Kaituo XU
 
+# # setup envionment and working directory
+# source ~/.zshrc
+# conda activate py37
+# cd /home/users/zge/code/repo/tasnet/egs/wsj0
+
 # -- START IMPORTANT
 # * If you have mixture wsj0 audio, modify `data` to your path that including tr, cv and tt.
-# * If you jsut have origin sphere format wsj0 , modify `wsj0_origin` to your path and
+# * If you just have origin sphere format wsj0 , modify `wsj0_origin` to your path and
 # modify `wsj0_wav` to path that put output wav format wsj0, then read and run stage 1 part.
 # After that, modify `data` and run from stage 2.
-wsj0_origin=/home/ktxu/workspace/data/CSR-I-WSJ0-LDC93S6A
-wsj0_wav=/home/ktxu/workspace/data/wsj0-wav/wsj0
-data=/home/ktxu/workspace/data/wsj-mix/2speakers/wav8k/min/
+
+# wsj0_origin=/home/ktxu/workspace/data/CSR-I-WSJ0-LDC93S6A
+# wsj0_wav=/home/ktxu/workspace/data/wsj0-wav/wsj0
+# data=/home/ktxu/workspace/data/wsj-mix/2speakers/wav8k/min/
+
+wsj0_origin=/home/sprats/data/WSJ0
+wsj0_wav=/home/users/zge/data1/datasets/WSJ0/wav
+data=/home/users/zge/data1/datasets/WSJ0/wav8k/min
+
 stage=1  # Modify this to control to start from which stage
 # -- END
 
@@ -45,7 +56,7 @@ early_stop=0
 max_norm=5
 # minibatch
 shuffle=1
-batch_size=3
+batch_size=6 # original: 3
 num_workers=4
 # optimizer
 optimizer=adam
@@ -55,6 +66,7 @@ l2=0
 # save and visualize
 checkpoint=0
 continue_from=""
+model_path="final.pth"
 print_freq=10
 visdom=0
 visdom_epoch=0
@@ -93,23 +105,28 @@ fi
 
 
 if [ $stage -le 1 ]; then
-  echo "Stage 1: Generating json files including wav path and duration"
+  echo "Stage 1: Generating json files including wav path and duration (#samples)"
   [ ! -d $dumpdir ] && mkdir $dumpdir
-  preprocess.py --in-dir $data --out-dir $dumpdir --sample-rate $sample_rate
+  preprocess.py \
+    --in-dir $data \
+    --out-dir $dumpdir \
+    --sample-rate $sample_rate
 fi
 
-
+tag=titan12
 if [ -z ${tag} ]; then
   expdir=exp/train_r${sample_rate}_N${N}_L${L}_B${B}_H${H}_P${P}_X${X}_R${R}_C${C}_${norm_type}_causal${causal}_${mask_nonlinear}_epoch${epochs}_half${half_lr}_norm${max_norm}_bs${batch_size}_worker${num_workers}_${optimizer}_lr${lr}_mmt${momentum}_l2${l2}_`basename $train_dir`
 else
   expdir=exp/train_${tag}
 fi
+echo "exp dir: ${expdir}"
 
+cuda_cmd="run.pl --mem 4G --gpu 1"
 if [ $stage -le 2 ]; then
   echo "Stage 2: Training"
   ${cuda_cmd} --gpu ${ngpu} ${expdir}/train.log \
     CUDA_VISIBLE_DEVICES="$id" \
-    train.py \
+    train.titan12.py \
     --train_dir $train_dir \
     --valid_dir $valid_dir \
     --sample_rate $sample_rate \
@@ -141,24 +158,75 @@ if [ $stage -le 2 ]; then
     --save_folder ${expdir} \
     --checkpoint $checkpoint \
     --continue_from "$continue_from" \
+    --model_path ${model_path} \
     --print_freq ${print_freq} \
     --visdom $visdom \
     --visdom_epoch $visdom_epoch \
     --visdom_id "$visdom_id"
 fi
 
+if [ $stage -le 2 ]; then
+  echo "Stage 2: Training"
+  CUDA_VISIBLE_DEVICES="$id" \
+    train.titan12.py \
+    --train_dir $train_dir \
+    --valid_dir $valid_dir \
+    --sample_rate $sample_rate \
+    --segment $segment \
+    --cv_maxlen $cv_maxlen \
+    --N $N \
+    --L $L \
+    --B $B \
+    --H $H \
+    --P $P \
+    --X $X \
+    --R $R \
+    --C $C \
+    --norm_type $norm_type \
+    --causal $causal \
+    --mask_nonlinear $mask_nonlinear \
+    --use_cuda $use_cuda \
+    --epochs $epochs \
+    --half_lr $half_lr \
+    --early_stop $early_stop \
+    --max_norm $max_norm \
+    --shuffle $shuffle \
+    --batch_size $batch_size \
+    --num_workers $num_workers \
+    --optimizer $optimizer \
+    --lr $lr \
+    --momentum $momentum \
+    --l2 $l2 \
+    --save_folder ${expdir} \
+    --checkpoint $checkpoint \
+    --continue_from "$continue_from" \
+    --model_path ${model_path} \
+    --print_freq ${print_freq} \
+    --visdom $visdom \
+    --visdom_epoch $visdom_epoch \
+    --visdom_id "$visdom_id" | tee ${expdir}/train.log 
+fi
+
 if [ $stage -le 3 ]; then
   echo "Stage 3: Evaluate separation performance"
   ${decode_cmd} --gpu ${ngpu} ${expdir}/evaluate.log \
     evaluate.py \
-    --model_path ${expdir}/final.pth.tar \
+    --model_path ${expdir}/final.pth \
     --data_dir $evaluate_dir \
     --cal_sdr $cal_sdr \
     --use_cuda $ev_use_cuda \
     --sample_rate $sample_rate \
     --batch_size $batch_size
-fi
 
+  # evaluate.py \
+  #   --model_path ${expdir}/final.pth \
+  #   --data_dir $evaluate_dir \
+  #   --cal_sdr $cal_sdr \
+  #   --use_cuda $ev_use_cuda \
+  #   --sample_rate $sample_rate \
+  #   --batch_size $batch_size | tee ${expdir}/evaluate.log
+
+fi
 
 if [ $stage -le 4 ]; then
   echo "Stage 4: Separate speech using Conv-TasNet"

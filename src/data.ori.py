@@ -34,15 +34,13 @@ class AudioDataset(data.Dataset):
     def __init__(self, json_dir, batch_size, sample_rate=8000, segment=4.0, cv_maxlen=8.0):
         """
         Args:
-            json_dir: directory including mix.json, spk1.json and spk2.json
+            json_dir: directory including mix.json, s1.json and s2.json
             segment: duration of audio segment, when set to -1, use full audio
 
         xxx_infos is a list and each item is a tuple (wav_file, #samples)
         """
         super(AudioDataset, self).__init__()
         mix_json = os.path.join(json_dir, 'mix.json')
-        # s1_json = os.path.join(json_dir, 'spk1.json')
-        # s2_json = os.path.join(json_dir, 'spk2.json')
         s1_json = os.path.join(json_dir, 's1.json')
         s2_json = os.path.join(json_dir, 's2.json')
         with open(mix_json, 'r') as f:
@@ -159,16 +157,23 @@ def _collate_fn(batch):
 
 
 # Eval data part
+from preprocess import preprocess_one_dir
 
 class EvalDataset(data.Dataset):
 
-    def __init__(self, mix_json, batch_size, sample_rate=8000):
+    def __init__(self, mix_dir, mix_json, batch_size, sample_rate=8000):
         """
         Args:
+            mix_dir: directory including mixture wav files
             mix_json: json file including mixture wav files
         """
         super(EvalDataset, self).__init__()
-        assert mix_json != None
+        assert mix_dir != None or mix_json != None
+        if mix_dir is not None:
+            # Generate mix.json given mix_dir
+            preprocess_one_dir(mix_dir, mix_dir, 'mix',
+                               sample_rate=sample_rate)
+            mix_json = os.path.join(mix_dir, 'mix.json')
         with open(mix_json, 'r') as f:
             mix_infos = json.load(f)
         # sort it by #samples (impl bucket)

@@ -32,11 +32,14 @@ def preprocess_one_dir(in_dir, out_dir, out_filename, sample_rate=8000):
         json.dump(file_infos, f, indent=4)
 
 def preprocess(args):
+
+    sr_type = {8000:'8k', 16000: '16k'}
     for data_type in ['tr', 'cv', 'tt']:
         for speaker in ['mix', 's1', 's2']:
-            print(f'{data_type}:{speaker} ...')
+            sr_folder = sr_type[args.sample_rate]
+            print(f'{data_type}:{sr_folder}:{speaker} ...')
             in_dir = os.path.join(args.in_dir, data_type, speaker)
-            out_dir = os.path.join(args.out_dir, data_type)
+            out_dir = os.path.join(args.out_dir, sr_folder, data_type)
             preprocess_one_dir(in_dir, out_dir, speaker, sample_rate=args.sample_rate)
 
 def parse_args():
@@ -60,9 +63,9 @@ if __name__ == "__main__":
 
     # # interactive mode
     # args = argparse.ArgumentParser()
-    # args.in_dir = '/home/users/zge/data1/datasets/WSJ0/wav8k/min'
+    # args.in_dir = '/home/users/zge/data1/datasets/WSJ0/wav16k/min'
     # args.out_dir = 'data'
-    # args.sample_rate = 8000
+    # args.sample_rate = 16000
 
     print(args)
     preprocess(args)

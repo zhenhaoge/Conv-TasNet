@@ -8,18 +8,19 @@
 # conda activate py37
 # cd /home/users/zge/code/repo/tasnet/egs/Echo2Mix
 
-data=/home/users/zge/data1/datasets/Echo2Mix
+# data=/home/users/zge/data1/datasets/Echo2Mix/16k
+data=/home/users/zge/data1/datasets/Echo2Mix/8k
 
 stage=1
 
-dumpdir=data
+dumpdir=data/8k
 
 # -- START Conv-TasNet Config
 train_dir=$dumpdir/train
 valid_dir=$dumpdir/val
 evaluate_dir=$dumpdir/test
 separate_dir=$dumpdir/test
-sample_rate=16000
+sample_rate=8000
 segment=4  # seconds
 cv_maxlen=6  # seconds
 # Network config
@@ -36,7 +37,7 @@ mask_nonlinear='relu'
 C=2
 # Training config
 use_cuda=1
-id=0,1,2
+id=1,2,0 # device 0 is RTX3090 shown as device 2 in nvidia-smi
 epochs=100
 half_lr=1
 early_stop=0
@@ -44,7 +45,7 @@ max_norm=5
 # minibatch
 shuffle=1
 batch_size=6 # original: 3
-num_workers=4
+num_workers=12
 # optimizer
 optimizer=adam
 lr=1e-3
@@ -75,7 +76,7 @@ ngpu=1  # always 1
 if [ $stage -le 1 ]; then
   echo "Stage 1: Generating json files including wav path and duration (#samples)"
   [ ! -d $dumpdir ] && mkdir $dumpdir
-  preprocess.py \
+  python local/preprocess.py \
     --in-dir $data \
     --out-dir $dumpdir \
     --sample-rate $sample_rate
@@ -87,13 +88,14 @@ if [ -z ${tag} ]; then
 else
   expdir=exp/train_${tag}
 fi
+mkdir -p $expdir
 echo "exp dir: ${expdir}"
-continue_from="${expdir}/checkpoint.epoch14.pth"
+# continue_from="${expdir}/checkpoint.epoch14.pth"
 
 if [ $stage -le 2 ]; then
   echo "Stage 2: Training"
   touch ${expdir}/train.log
-  CUDA_VISIBLE_DEVICES=0,1 \
+  CUDA_VISIBLE_DEVICES=$id \
     train.py \
     --train_dir $train_dir \
     --valid_dir $valid_dir \

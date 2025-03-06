@@ -41,10 +41,12 @@ class AudioDataset(data.Dataset):
         """
         super(AudioDataset, self).__init__()
         mix_json = os.path.join(json_dir, 'mix.json')
-        # s1_json = os.path.join(json_dir, 'spk1.json')
-        # s2_json = os.path.join(json_dir, 'spk2.json')
-        s1_json = os.path.join(json_dir, 's1.json')
-        s2_json = os.path.join(json_dir, 's2.json')
+        s1_json = os.path.join(json_dir, 'spk1.json')
+        s2_json = os.path.join(json_dir, 'spk2.json')
+        if not os.path.isfile(s1_json):
+            s1_json = os.path.join(json_dir, 's1.json')
+        if not os.path.isfile(s2_json):
+            s2_json = os.path.join(json_dir, 's2.json')
         with open(mix_json, 'r') as f:
             mix_infos = json.load(f)
         with open(s1_json, 'r') as f:

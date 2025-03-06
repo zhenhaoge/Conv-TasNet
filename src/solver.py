@@ -69,15 +69,17 @@ class Solver(object):
     def train(self):
         # Train model multi-epoches
         for epoch in range(self.start_epoch, self.epochs):
+
             # Train one epoch
             print("Training...")
             self.model.train()  # Turn on BatchNorm & Dropout
             start = time.time()
             tr_avg_loss = self._run_one_epoch(epoch)
+            torch.cuda.empty_cache()
             print('-' * 85)
             print('Train Summary | End of Epoch {0} | Time {1:.2f}s | '
-                  'Train Loss {2:.3f}'.format(
-                      epoch + 1, time.time() - start, tr_avg_loss))
+                'Train Loss {2:.3f}'.format(
+                    epoch + 1, time.time() - start, tr_avg_loss))
             print('-' * 85)
 
             # Save model each epoch
@@ -95,6 +97,7 @@ class Solver(object):
             print('Cross validation...')
             self.model.eval()  # Turn off Batchnorm & Dropout
             val_loss = self._run_one_epoch(epoch, cross_valid=True)
+            torch.cuda.empty_cache()
             print('-' * 85)
             print('Valid Summary | End of Epoch {0} | Time {1:.2f}s | '
                   'Valid Loss {2:.3f}'.format(
@@ -169,42 +172,45 @@ class Solver(object):
             vis_iters = torch.arange(1, len(data_loader) + 1)
             vis_iters_loss = torch.Tensor(len(data_loader))
 
-        for i, (data) in enumerate(data_loader):
-            padded_mixture, mixture_lengths, padded_source = data
-            if self.use_cuda:
-                padded_mixture = padded_mixture.cuda()
-                mixture_lengths = mixture_lengths.cuda()
-                padded_source = padded_source.cuda()
-            estimate_source = self.model(padded_mixture)
-            loss, max_snr, estimate_source, reorder_estimate_source = \
-                cal_loss(padded_source, estimate_source, mixture_lengths)
-            if not cross_valid:
-                self.optimizer.zero_grad()
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(),
-                                               self.max_norm)
-                self.optimizer.step()
+        with torch.no_grad() if cross_valid else torch.enable_grad():
+            for i, (data) in enumerate(data_loader):
+                padded_mixture, mixture_lengths, padded_source = data
+                if self.use_cuda:
+                    padded_mixture = padded_mixture.cuda(non_blocking=True)
+                    mixture_lengths = mixture_lengths.cuda(non_blocking=True)
+                    padded_source = padded_source.cuda(non_blocking=True)
+                estimate_source = self.model(padded_mixture)
+                loss, max_snr, estimate_source, reorder_estimate_source = \
+                    cal_loss(padded_source, estimate_source, mixture_lengths)
 
-            total_loss += loss.item()
+                # only backpropagate during training
+                if not cross_valid:
+                    self.optimizer.zero_grad()
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(),
+                                                self.max_norm)
+                    self.optimizer.step()
 
-            if i % self.print_freq == 0:
-                print('Epoch {0} | Iter {1} | Average Loss {2:.3f} | '
-                      'Current Loss {3:.6f} | {4:.1f} ms/batch'.format(
-                          epoch + 1, i + 1, total_loss / (i + 1),
-                          loss.item(), 1000 * (time.time() - start) / (i + 1)),
-                      flush=True)
+                total_loss += loss.item()
 
-            # visualizing loss using visdom
-            if self.visdom_epoch and not cross_valid:
-                vis_iters_loss[i] = loss.item()
                 if i % self.print_freq == 0:
-                    x_axis = vis_iters[:i+1]
-                    y_axis = vis_iters_loss[:i+1]
-                    if vis_window_epoch is None:
-                        vis_window_epoch = self.vis.line(X=x_axis, Y=y_axis,
-                                                         opts=vis_opts_epoch)
-                    else:
-                        self.vis.line(X=x_axis, Y=y_axis, win=vis_window_epoch,
-                                      update='replace')
+                    print('Epoch {0} | Iter {1} | Average Loss {2:.3f} | '
+                        'Current Loss {3:.6f} | {4:.1f} ms/batch'.format(
+                            epoch + 1, i + 1, total_loss / (i + 1),
+                            loss.item(), 1000 * (time.time() - start) / (i + 1)),
+                        flush=True)
+
+                # visualizing loss using visdom
+                if self.visdom_epoch and not cross_valid:
+                    vis_iters_loss[i] = loss.item()
+                    if i % self.print_freq == 0:
+                        x_axis = vis_iters[:i+1]
+                        y_axis = vis_iters_loss[:i+1]
+                        if vis_window_epoch is None:
+                            vis_window_epoch = self.vis.line(X=x_axis, Y=y_axis,
+                                                            opts=vis_opts_epoch)
+                        else:
+                            self.vis.line(X=x_axis, Y=y_axis, win=vis_window_epoch,
+                                        update='replace')
 
         return total_loss / (i + 1)

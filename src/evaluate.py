@@ -4,7 +4,7 @@
 # Author: Kaituo XU
 
 import argparse
-import os
+import os, sys
 from pathlib import Path
 import librosa
 import numpy as np
@@ -18,6 +18,8 @@ import torch
 work_dir = os.getcwd()
 print('current path: {}'.format(work_dir))
 
+src_dir = os.path.join(os.path.dirname(os.path.dirname(os.getcwd())), 'src')
+sys.path.insert(0, src_dir)
 from mir_eval.separation import bss_eval_sources
 from data import AudioDataLoader, AudioDataset
 from pit_criterion import cal_loss
@@ -64,9 +66,9 @@ def evaluate(args):
     with torch.no_grad():
         for i, (data) in enumerate(data_loader):
 
-            # check the first batch
-            print('stop at the first batch')
-            break
+            # # check the first batch
+            # print('stop at the first batch')
+            # break
 
             # Get batch data
             padded_mixture, mixture_lengths, padded_source = data
@@ -92,7 +94,8 @@ def evaluate(args):
             estimate_source = remove_pad(reorder_estimate_source_nograd, mixture_lengths)
 
             # for each utterance
-            for j in range(args.batch_size):
+            bs_current = padded_mixture.shape[0]
+            for j in range(bs_current):
                 mix, src_ref, src_est = mixture[j], source[j], estimate_source[j]
             # for mix, src_ref, src_est in zip(mixture, source, estimate_source):
                 print("Utt", total_cnt + 1)
@@ -125,9 +128,9 @@ if __name__ == '__main__':
     # # for the self-trained model
 
     # # wsj0 - model 1
-    # args.exp_folder = 'exp/train_r8000_N256_L20_B256_H512_P3_X8_R4_C2_gLN_causal0_relu_epoch100_half1_norm5_bs3_worker4_adam_lr1e-3_mmt0_l20_tr'
-    # args.data_dir = os.path.join(work_dir, 'data', 'tt')
-    # args.sample_rate = 8000
+    # args.exp_folder = 'exp/train_r16000_N256_L20_B256_H512_P3_X8_R4_C2_gLN_causal0_relu_epoch100_half1_norm5_bs4_worker4_adam_lr1e-3_mmt0_l20_tr'
+    # args.data_dir = os.path.join(work_dir, 'data', '16k', 'tt')
+    # args.sample_rate = 16000
 
     # # wsj0 - model 2
     # args.exp_folder = 'exp/train_titan12'
@@ -136,8 +139,9 @@ if __name__ == '__main__':
 
     # # Echo2Mix
     # args.exp_folder = 'exp/train_r16000_N256_L20_B256_H512_P3_X8_R4_C2_gLN_causal0_relu_epoch100_half1_norm5_bs6_worker4_adam_lr1e-3_mmt0_l20_train'
-    # args.data_dir = os.path.join(work_dir, 'data', 'test')
-    # args.sample_rate = 16000
+    # args.exp_folder = 'exp/train_r8000_N256_L20_B256_H512_P3_X8_R4_C2_gLN_causal0_relu_epoch100_half1_norm5_bs6_worker12_adam_lr1e-3_mmt0_l20_train'
+    # args.data_dir = os.path.join(work_dir, 'data', '8k', 'test')
+    # args.sample_rate = 8000
 
     # args.model_path = os.path.join(work_dir, args.exp_folder, 'final.pth')
     # args.batch_size = 6
